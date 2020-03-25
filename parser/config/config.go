@@ -8,6 +8,7 @@ import (
 const (
 	KeyCSVSchema             = "csv_schema"               // csv 每个列的列名和类型 long/string/float/date
 	KeyCSVSplitter           = "csv_splitter"             // csv 的分隔符
+	KeyCSVAutoParseSchema    = "csv_auto_parse_schema"    // csv 的schema从数据中解析
 	KeyCSVLabels             = "csv_labels"               // csv 额外增加的标签信息，比如机器信息等
 	KeyCSVAutoRename         = "csv_auto_rename"          // 是否将不合法的字段名称重命名一下, 比如 header-host 重命名为 header_host
 	KeyCSVAllowNoMatch       = "csv_allow_no_match"       // 允许实际分隔的数据和schema不相等，不相等时按顺序赋值
@@ -254,6 +255,17 @@ var ModeKeyOptions = map[string][]Option{
 			DefaultNoUse: false,
 			Description:  "分隔符(csv_splitter)",
 			ToolTip:      `csv_splitter csv文件的分隔符定义，默认为','`,
+		},
+		{
+			KeyName:       KeyCSVAutoParseSchema,
+			Element:       Radio,
+			ChooseOnly:    false,
+			Advance:       true,
+			ChooseOptions: []interface{}{"false", "true"},
+			Default:       "false",
+			DefaultNoUse:  true,
+			Description:   "自动解析Schema(csv_auto_parse_schema)",
+			ToolTip:       `"Schema从数据中解析，无需再配置"`,
 		},
 		{
 			KeyName:      KeyCSVSchema,

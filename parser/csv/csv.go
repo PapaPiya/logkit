@@ -47,7 +47,7 @@ type Parser struct {
 	labelList            []string
 	containSplitterKey   string
 	config               conf.MapConf
-	hasHeader            headerStatus
+	needParseSchema      bool
 }
 
 type field struct {
@@ -74,6 +74,7 @@ func init() {
 func NewParser(c conf.MapConf) (parser.Parser, error) {
 	name, _ := c.GetStringOr(KeyParserName, "")
 	splitter, _ := c.GetStringOr(KeyCSVSplitter, "\t")
+	needParseSchema, _ := c.GetBoolOr(KeyCSVSplitter, false)
 
 	disableRecordErrData, _ := c.GetBoolOr(KeyDisableRecordErrData, false)
 
@@ -97,18 +98,14 @@ func NewParser(c conf.MapConf) (parser.Parser, error) {
 		labelList, _ = c.GetStringListOr(KeyCSVLabels, []string{}) //向前兼容老的配置
 	}
 
-	// 预先根据schema的长度和获取配置状态判断，len=0使用列表第一行数据作为表头；否则 使用schema作为表头;
+	// 根据needParseSchema判断，true使用列表第一行数据作为表头；否则 使用schema作为表头;
 	// 使用第一行作为表头时，会造成数据类型的不明确；暂时使用string类型；
-	hasHeader := hasSchema
 	fields := make([]field, 0, 20)
 	labels := make([]GrokLabel, 0, 20)
 	schema, _ := c.GetStringOr(KeyCSVSchema, "")
-	if len(schema) == 0 {
-		hasHeader = needSchema
-	}
 
 	var err error
-	if hasHeader == hasSchema {
+	if needParseSchema == false {
 		// 头部处理
 		if fields, err = setHeaderWithSchema(schema); err != nil {
 			return nil, err
@@ -140,12 +137,11 @@ func NewParser(c conf.MapConf) (parser.Parser, error) {
 		labelList:            labelList,
 		containSplitterKey:   containSplitterKey,
 		config:               c,
-		hasHeader:            hasHeader,
+		needParseSchema:      needParseSchema,
 	}, nil
 }
 
 func setHeaderWithSchema(schema string) (fields []field, err error) {
-	// 包装头部处理 hasHeader == true
 	// 用户设置的表头处理
 	fieldList, err := parseSchemaFieldList(schema)
 	if err != nil {
@@ -520,7 +516,7 @@ func getUnmachedMessage(parts []string, schemas []field) (ret string) {
 func (p *Parser) parse(line string) (d Data, err error) {
 
 	// 1.判断是否使用schema; 针对第一行转换为表头； 2.多线程执行parse 会导致不是第一行数据被执行，或者多条数据被解析为表头，后续考虑解决方案；
-	if p.hasHeader == needSchema {
+	if p.needParseSchema == true {
 		// 转换表头
 		if p.schema, err = setHeaderWithoutSchema(line, p.delim, p.config); err != nil {
 			return nil, err
@@ -529,7 +525,7 @@ func (p *Parser) parse(line string) (d Data, err error) {
 		if p.labels, p.containSplitterIndex, err = checkLabelAndSplitterKey(p.schema, p.labelList, p.containSplitterKey); err != nil {
 			return
 		}
-		p.hasHeader = done
+		p.needParseSchema = false
 		return nil, nil
 	}
 
@@ -688,9 +684,9 @@ func (p *Parser) Parse(lines []string) ([]Data, error) {
 			continue
 		}
 		if len(parseResult.Data) < 1 { //数据为空时不发送
-			if p.hasHeader == done {
+			if p.needParseSchema == false {
 				// 忽略第一次数据
-				p.hasHeader = hasSchema
+				p.needParseSchema = hasSchema
 				continue
 			}
 			se.LastError = "parsed no data by line " + parseResult.Line
